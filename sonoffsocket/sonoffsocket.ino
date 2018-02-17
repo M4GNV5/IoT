@@ -3,6 +3,13 @@
 
 #include "./config.h"
 
+#define invert(x) (x == HIGH ? LOW : HIGH)
+#define tostring(x) (x == HIGH ? "1" : "0")
+
+#define GPIO_BUTTON 0
+#define GPIO_LED 13
+#define GPIO_RELAY 12
+
 enum
 {
 	ACTION_OFF,
@@ -10,10 +17,7 @@ enum
 	ACTION_TOGGLE,
 };
 
-#define GPIO_BUTTON 0
-#define GPIO_LED 13
-#define GPIO_RELAY 12
-
+int ignoreCount = 0;
 bool buttonPressed = false;
 uint8_t led = HIGH;
 uint8_t relay = LOW;
@@ -46,6 +50,12 @@ uint8_t performAction(uint8_t old, uint8_t action)
 
 void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 {
+	if(ignoreCount > 0)
+	{
+		ignoreCount--;
+		return;
+	}
+
 #ifdef DEBUG
 	Serial.print("Received MQTT message on ");
 	Serial.print(topic);
@@ -77,7 +87,7 @@ void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 		if(topic[0] == 0)
 		{
 			relay = performAction(relay, action);
-			led = relay;
+			led = invert(relay);
 		}
 		else if(strcmp(topic, "/led") == 0)
 		{
@@ -97,8 +107,8 @@ void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 
 			digitalWrite(GPIO_RELAY, relay);
 
-			if(mqtt.connected())
-				mqtt.publish(MQTT_TOPIC "/relay", relay == HIGH ? "1" : "0", true);
+			mqtt.publish(MQTT_TOPIC "/relay", tostring(relay), true);
+			ignoreCount++;
 		}
 		if(oldLed != led)
 		{
@@ -107,10 +117,11 @@ void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 			Serial.println(led);
 #endif
 
-			digitalWrite(GPIO_LED, led);
+			//the led is on when the pin is off, so we need to invert `led` here
+			digitalWrite(GPIO_LED, invert(led));
 
-			if(mqtt.connected())
-				mqtt.publish(MQTT_TOPIC "/led", led == HIGH ? "1" : "0", true);
+			mqtt.publish(MQTT_TOPIC "/led", tostring(led), true);
+			ignoreCount++;
 		}
 	}
 }
@@ -151,7 +162,7 @@ void loop()
 		{
 			blink(1, 1000);
 		}
-		digitalWrite(GPIO_LED, led);
+		digitalWrite(GPIO_LED, invert(led));
 
 #ifdef DEBUG
 		Serial.print("Connected, ");
@@ -178,10 +189,10 @@ void loop()
 		Serial.println("Connected");
 #endif
 
-		digitalWrite(GPIO_LED, led);
+		digitalWrite(GPIO_LED, invert(led));
 
-		mqtt.publish(MQTT_TOPIC "/relay", relay == HIGH ? "1" : "0", true);
-		mqtt.publish(MQTT_TOPIC "/led", led == HIGH ? "1" : "0", true);
+		mqtt.publish(MQTT_TOPIC "/relay", tostring(relay), true);
+		mqtt.publish(MQTT_TOPIC "/led", tostring(led), true);
 		mqtt.subscribe(MQTT_TOPIC);
 		mqtt.subscribe(MQTT_TOPIC "/led");
 		mqtt.subscribe(MQTT_TOPIC "/relay");
