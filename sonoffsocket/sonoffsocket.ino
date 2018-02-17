@@ -10,14 +10,29 @@ enum
 	ACTION_TOGGLE,
 };
 
+#define GPIO_BUTTON 0
 #define GPIO_LED 13
 #define GPIO_RELAY 12
 
+bool buttonPressed = false;
 uint8_t led = HIGH;
 uint8_t relay = LOW;
 
 WiFiClient client;
 PubSubClient mqtt(client);
+
+void blink(uint8_t count, uint32_t totalSleep)
+{
+	for(int i = 0; i < count; i++)
+	{
+		digitalWrite(GPIO_LED, LOW);
+		delay(100);
+		digitalWrite(GPIO_LED, HIGH);
+		delay(100);
+	}
+
+	delay(totalSleep - count * 200);
+}
 
 uint8_t performAction(uint8_t old, uint8_t action)
 {
@@ -64,11 +79,11 @@ void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 			relay = performAction(relay, action);
 			led = relay;
 		}
-		if(strcmp(topic, "/led") == 0)
+		else if(strcmp(topic, "/led") == 0)
 		{
 			led = performAction(led, action);
 		}
-		if(strcmp(topic, "/relay") == 0)
+		else if(strcmp(topic, "/relay") == 0)
 		{
 			relay = performAction(relay, action);
 		}
@@ -81,7 +96,9 @@ void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 #endif
 
 			digitalWrite(GPIO_RELAY, relay);
-			mqtt.publish(MQTT_TOPIC "/relay", relay == HIGH ? "1" : "0", true);
+
+			if(mqtt.connected())
+				mqtt.publish(MQTT_TOPIC "/relay", relay == HIGH ? "1" : "0", true);
 		}
 		if(oldLed != led)
 		{
@@ -91,7 +108,9 @@ void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 #endif
 
 			digitalWrite(GPIO_LED, led);
-			mqtt.publish(MQTT_TOPIC "/led", led == HIGH ? "1" : "0", true);
+
+			if(mqtt.connected())
+				mqtt.publish(MQTT_TOPIC "/led", led == HIGH ? "1" : "0", true);
 		}
 	}
 }
@@ -130,12 +149,9 @@ void loop()
 
 		while (WiFi.status() != WL_CONNECTED)
 		{
-			digitalWrite(GPIO_LED, HIGH);
-			delay(100);
-			digitalWrite(GPIO_LED, LOW);
-			delay(400);
+			blink(1, 1000);
 		}
-		digitalWrite(GPIO_LED, LOW);
+		digitalWrite(GPIO_LED, led);
 
 #ifdef DEBUG
 		Serial.print("Connected, ");
@@ -153,27 +169,41 @@ void loop()
 		Serial.println(MQTT_PORT);
 #endif
 
-		while(!mqtt.connected())
+		while(!mqtt.connect(MQTT_CLIENT_ID))
 		{
-			if(mqtt.connect(MQTT_CLIENT_ID))
-			{
+			blink(2, 1000);
+		}
+
 #ifdef DEBUG
-				Serial.println("Connected");
+		Serial.println("Connected");
 #endif
 
-				digitalWrite(GPIO_LED, led);
-				mqtt.subscribe(MQTT_TOPIC "/#");
-			}
-			else
-			{
-				digitalWrite(GPIO_LED, HIGH);
-				delay(2900);
-				digitalWrite(GPIO_LED, LOW);
-				delay(100);
-			}
-		}
+		digitalWrite(GPIO_LED, led);
+
+		mqtt.publish(MQTT_TOPIC "/relay", relay == HIGH ? "1" : "0", true);
+		mqtt.publish(MQTT_TOPIC "/led", led == HIGH ? "1" : "0", true);
+		mqtt.subscribe(MQTT_TOPIC);
+		mqtt.subscribe(MQTT_TOPIC "/led");
+		mqtt.subscribe(MQTT_TOPIC "/relay");
 	}
 
 	mqtt.loop();
-	delay(100);
+
+	if(digitalRead(GPIO_BUTTON) == 0)
+	{
+		if(!buttonPressed)
+		{
+#ifdef DEBUG
+			Serial.println("Button press detected. Emulating MQTT receive...");
+#endif
+			mqtt_callback((char *)MQTT_TOPIC, (uint8_t *)"toggle", 6);
+			buttonPressed = true;
+		}
+	}
+	else
+	{
+		buttonPressed = false;
+	}
+
+	delay(50);
 }
