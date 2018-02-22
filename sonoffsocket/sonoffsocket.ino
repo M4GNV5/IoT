@@ -68,61 +68,61 @@ void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 #endif
 
 	unsigned prefixLen = strlen(MQTT_TOPIC);
-	if(strncmp(topic, MQTT_TOPIC, prefixLen) == 0)
+	if(strncmp(topic, MQTT_TOPIC, prefixLen) != 0)
+		return;
+
+	uint8_t action;
+	if(len == 1 && payload[0] == '1')
+		action = ACTION_ON;
+	else if(len == 1 && payload[0] == '0')
+		action = ACTION_OFF;
+	else if(len == 6 && strncmp((char *)payload, "toggle", 6) == 0)
+		action = ACTION_TOGGLE;
+	else
+		return;
+
+	uint8_t oldLed = led;
+	uint8_t oldRelay = relay;
+
+	topic = topic + prefixLen;
+	if(topic[0] == 0)
 	{
-		uint8_t action;
-		if(len == 1 && payload[0] == '1')
-			action = ACTION_ON;
-		else if(len == 1 && payload[0] == '0')
-			action = ACTION_OFF;
-		else if(len == 6 && strncmp((char *)payload, "toggle", 6) == 0)
-			action = ACTION_TOGGLE;
-		else
-			return;
+		relay = performAction(relay, action);
+		led = invert(relay);
+	}
+	else if(strcmp(topic, "/led") == 0)
+	{
+		led = performAction(led, action);
+	}
+	else if(strcmp(topic, "/relay") == 0)
+	{
+		relay = performAction(relay, action);
+	}
 
-		uint8_t oldLed = led;
-		uint8_t oldRelay = relay;
-
-		topic = topic + prefixLen;
-		if(topic[0] == 0)
-		{
-			relay = performAction(relay, action);
-			led = invert(relay);
-		}
-		else if(strcmp(topic, "/led") == 0)
-		{
-			led = performAction(led, action);
-		}
-		else if(strcmp(topic, "/relay") == 0)
-		{
-			relay = performAction(relay, action);
-		}
-
-		if(oldRelay != relay)
-		{
+	if(oldRelay != relay)
+	{
 #ifdef DEBUG
-			Serial.print("Set relay to ");
-			Serial.println(relay);
+		Serial.print("Set relay to ");
+		Serial.println(relay);
 #endif
 
-			digitalWrite(GPIO_RELAY, relay);
+		digitalWrite(GPIO_RELAY, relay);
 
-			mqtt.publish(MQTT_TOPIC "/relay", tostring(relay), true);
-			ignoreCount++;
-		}
-		if(oldLed != led)
-		{
+		mqtt.publish(MQTT_TOPIC "/relay", tostring(relay), true);
+		ignoreCount++;
+	}
+	if(oldLed != led)
+	{
 #ifdef DEBUG
-			Serial.print("Set led to ");
-			Serial.println(led);
+		Serial.print("Set led to ");
+		Serial.println(led);
 #endif
 
-			//the led is on when the pin is off, so we need to invert `led` here
-			digitalWrite(GPIO_LED, invert(led));
+		//the led is on when the pin is off, so we need to invert `led` here
+		digitalWrite(GPIO_LED, invert(led));
 
-			mqtt.publish(MQTT_TOPIC "/led", tostring(led), true);
-			ignoreCount++;
-		}
+		mqtt.publish(MQTT_TOPIC "/led", tostring(led), true);
+		ignoreCount++;
 	}
 }
 
