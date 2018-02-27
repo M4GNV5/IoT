@@ -156,7 +156,7 @@ static void stopPlaying()
 	playing = false;
 }
 
-static unsigned strntou(char *str, size_t len, const char **endptr)
+static unsigned strntou(char *str, size_t len, char **endptr)
 {
 	unsigned val = 0;
 	size_t i;
@@ -171,6 +171,8 @@ static unsigned strntou(char *str, size_t len, const char **endptr)
 
 	if(endptr != NULL)
 		*endptr = str + i;
+
+	return val;
 }
 
 void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
@@ -214,9 +216,9 @@ void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 	{
 		uint8_t oldVolume = volume;
 
-		const char *end;
-		volume = strntou(payload, len, &end);
-		if(end != payload + len)
+		char *end;
+		volume = strntou((char *)payload, len, &end);
+		if(end != (char *)payload + len)
 			return;
 
 		if(volume != oldVolume)
@@ -227,6 +229,31 @@ void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 #endif
 			output.setVolume(volume);
 		}
+	}
+	else if(strcmp(topic, "/tone") == 0)
+	{
+		uint8_t values[4];
+		char *pos = (char *)payload;
+		for(int i = 0; i < 4; i++)
+		{
+			values[i] = strntou(pos, len - (pos - (char *)payload), &pos);
+
+			if(i != 3 && (pos >= (char *)payload + len || *pos++ != ','))
+				return;
+		}
+
+#ifdef DEBUG
+			Serial.print("Setting tone to ");
+			for(int i = 0; i < 4; i++)
+			{
+				Serial.print(values[i]);
+
+				if(i != 3)
+					Serial.print("/");
+			}
+			Serial.println();
+#endif
+		output.setTone(values);
 	}
 	else if(strcmp(topic, "/station") == 0)
 	{
@@ -272,6 +299,7 @@ void loop()
 	{
 		mqtt.subscribe(MQTT_TOPIC "/playing");
 		mqtt.subscribe(MQTT_TOPIC "/volume");
+		mqtt.subscribe(MQTT_TOPIC "/tone");
 		mqtt.subscribe(MQTT_TOPIC "/station");
 	});
 
