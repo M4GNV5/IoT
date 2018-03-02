@@ -42,18 +42,17 @@ bool http_open(const char *host, const char *path)
 	input.println(host);
 
 	input.println("User-Agent: WebRadio ESP8266/VS1053 - https://github.com/M4GNV5/IoT");
-	input.println("Accept: audio/mpeg");
-	input.println("icy-metadata: 0");
+	input.println("Accept: audio/*");
 	input.println();
 
-	const char *httpOk = "HTTP/1.0 200 OK\r\n";
+	const char *httpOk = "HTTP/??? 200 OK\r\n";
 	const int httpOkLen = strlen(httpOk);
 	for(int i = 0; i < httpOkLen; i++)
 	{
 		while(input.connected() && !input.available())
 			yield();
 
-		if(!input.connected() || input.read() != httpOk[i])
+		if(!input.connected() || (input.read() != httpOk[i] && httpOk[i] != '?'))
 		{
 #ifdef DEBUG
 			Serial.println("Unexpected HTTP response");
@@ -131,6 +130,8 @@ static void startPlaying(const char *url)
 	if(http_open(_host, path))
 	{
 		output.startSong();
+		buffpos = 0;
+		bufflen = 0;
 		playing = true;
 #ifdef DEBUG
 		Serial.println("Successfully started playing");
