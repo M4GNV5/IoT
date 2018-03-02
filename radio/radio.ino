@@ -3,8 +3,7 @@
 
 #include "VS1053.hpp"
 #include "config.h"
-
-#include "/home/jakob/git/iot/common/ConnectionManager.hpp"
+#include "ConnectionManager.hpp"
 
 WiFiClient mqtt_sock;
 PubSubClient mqtt(mqtt_sock);
