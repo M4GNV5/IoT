@@ -8,7 +8,8 @@
 WiFiClient mqtt_sock;
 PubSubClient mqtt(mqtt_sock);
 
-ConnectionManager connections(mqtt);
+//built-in led on LoLin boards is off when D4 is HIGH
+ConnectionManager connections(mqtt, D4, HIGH);
 
 WiFiClient input;
 VS1053 output(VS1053_PINS);
@@ -282,6 +283,8 @@ void setup()
 
 	mqtt.setServer(MQTT_SERVER, MQTT_PORT);
 	mqtt.setCallback(mqtt_callback);
+
+	connections.setup();
 
 	SPI.begin();
 	output.begin();

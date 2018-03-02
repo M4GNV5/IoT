@@ -2,29 +2,38 @@
 
 class ConnectionManager
 {
-public:
+private:
 	PubSubClient& mqtt;
-	ConnectionManager(PubSubClient& _mqtt) : mqtt(_mqtt)
+	uint8_t ledPin;
+	uint8_t ledOff;
+
+public:
+	ConnectionManager(PubSubClient& _mqtt, uint8_t _ledPin, uint8_t _ledOff)
+		: mqtt(_mqtt), ledPin(_ledPin), ledOff(_ledOff)
 	{
 	}
 
 	void blink(uint8_t count, uint32_t totalSleep)
 	{
-		/* TODO re-add blinking
 		for(int i = 0; i < count; i++)
 		{
-			digitalWrite(GPIO_LED, LOW);
+			digitalWrite(ledPin, !ledOff);
 			delay(100);
-			digitalWrite(GPIO_LED, HIGH);
+			digitalWrite(ledPin, ledOff);
 			delay(100);
-		}*/
+		}
 
 #ifdef DEBUG
 		Serial.print(".");
 #endif
 
-		//delay(totalSleep - count * 200);
-		delay(totalSleep);
+		delay(totalSleep - count * 200);
+	}
+
+	void setup()
+	{
+		pinMode(ledPin, OUTPUT);
+		digitalWrite(ledPin, ledOff);
 	}
 
 	void loop(void (*mqtt_reconnect)())
