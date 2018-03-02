@@ -318,11 +318,17 @@ void loop()
 		}
 
 		size_t bytesAvailable = input.available();
-		if(bufflen <= BUFFER_SIZE && bytesAvailable > 0)
+		if(bufflen < BUFFER_SIZE && bytesAvailable > 0)
 		{
 			uint8_t *start = &buffer[(buffpos + bufflen) % BUFFER_SIZE];
 			uint8_t *buffend = buffer + BUFFER_SIZE;
-			size_t len = start + bytesAvailable >= buffend ? buffend - start : bytesAvailable;
+
+			size_t len = bytesAvailable;
+			if(start + len >= buffend)
+				len = buffend - start;
+			if(BUFFER_SIZE - bufflen < len)
+				len = BUFFER_SIZE - bufflen;
+
 			input.readBytes(start, len);
 			bufflen += len;
 		}
