@@ -31,7 +31,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-//#include <ArduinoSerial.print>
 #include "VS1053.hpp"
 #include <string>
 
@@ -121,7 +120,9 @@ bool VS1053::testComm(const char *header) {
     uint16_t delta = 300; // 3 for fast SPI
 
     if (!digitalRead(dreq_pin)) {
+#ifdef DEBUG
         Serial.println("VS1053 not properly installed!");
+#endif
         // Allow testing without the VS1053 module
         //pinMode(dreq_pin, INPUT_PULLUP); // DREQ is now input with pull-up
         return false;                    // Return bad result
@@ -134,7 +135,9 @@ bool VS1053::testComm(const char *header) {
         delta = 3; // Fast SPI, more loops
     }
 
+#ifdef DEBUG
     Serial.println(header);  // Show a header
+#endif
 
     for (i = 0; (i < 0xFFFF) && (cnt < 20); i += delta) {
         write_register(SCI_VOL, i);         // Write data to SCI_VOL
@@ -142,12 +145,14 @@ bool VS1053::testComm(const char *header) {
         r2 = read_register(SCI_VOL);        // Read back a second time
         if (r1 != r2 || i != r1 || i != r2) // Check for 2 equal reads
         {
+#ifdef DEBUG
             Serial.print("VS1053 error retry SB:");
             Serial.print(i);
             Serial.print(" R1:");
             Serial.print(r1);
             Serial.print(" R2:");
             Serial.println(r2);
+#endif
             cnt++;
             delay(10);
         }
@@ -164,11 +169,15 @@ bool VS1053::begin() {
     digitalWrite(dcs_pin, HIGH); // Start HIGH for SCI en SDI
     digitalWrite(cs_pin, HIGH);
     delay(100);
+#ifdef DEBUG
     Serial.println("Reset VS1053...");
+#endif
     digitalWrite(dcs_pin, LOW); // Low & Low will bring reset pin low
     digitalWrite(cs_pin, LOW);
     delay(500);
+#ifdef DEBUG
     Serial.println("End reset VS1053...");
+#endif
     digitalWrite(dcs_pin, HIGH); // Back to normal again
     digitalWrite(cs_pin, HIGH);
     delay(500);
@@ -178,8 +187,11 @@ bool VS1053::begin() {
     delay(20);
     // printDetails ( "20 msec after reset" ) ;
     result = testComm("Slow SPI,Testing VS1053 read/write registers...");
+
+#ifdef DEBUG
     Serial.print("Slow SPI testComm result: ");
     Serial.println(result);
+#endif
 
     //softReset();
 
@@ -191,13 +203,19 @@ bool VS1053::begin() {
     VS1053_SPI = SPISettings(4000000, MSBFIRST, SPI_MODE0);
     write_register(SCI_MODE, _BV(SM_SDINEW) | _BV(SM_LINE1));
     result = testComm("Fast SPI, Testing VS1053 read/write registers again...");
+
+#ifdef DEBUG
     Serial.print("Fast SPI testComm result: ");
     Serial.println(result);
+#endif
     delay(10);
     await_data_request();
     endFillByte = wram_read(0x1E06) & 0xFF;
+
+#ifdef DEBUG
     Serial.print("endFillByte is ");
     Serial.println(endFillByte);
+#endif
     // printDetails ( "After last clocksetting" ) ;
     delay(100);
     return result;
@@ -253,9 +271,12 @@ void VS1053::stopSong() {
         modereg = read_register(SCI_MODE); // Read status
         if ((modereg & _BV(SM_CANCEL)) == 0) {
             sdi_send_fillers(2052);
+
+#ifdef DEBUG
             Serial.print("Song stopped correctly after ");
             Serial.print(i * 10);
             Serial.println(" msec");
+#endif
             return;
         }
         delay(10);
@@ -270,6 +291,7 @@ void VS1053::softReset() {
 }
 
 void VS1053::printDetails(const char *header) {
+#ifdef DEBUG
     uint16_t regbuf[16];
     uint8_t i;
 
@@ -287,6 +309,7 @@ void VS1053::printDetails(const char *header) {
         Serial.print(" - ");
         Serial.println(regbuf[i]);
     }
+#endif
 }
 
 /**
