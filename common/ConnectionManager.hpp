@@ -8,6 +8,11 @@ private:
 	uint8_t ledOff;
 
 public:
+	uint8_t lastWillQos = MQTTQOS0;
+	const char *lastWillTopic = NULL;
+	const char *lastWillMessage = NULL;
+	bool lastWillRetain = true;
+
 	ConnectionManager(PubSubClient& _mqtt, uint8_t _ledPin, uint8_t _ledOff)
 		: mqtt(_mqtt), ledPin(_ledPin), ledOff(_ledOff)
 	{
@@ -66,7 +71,7 @@ public:
 			Serial.print(MQTT_PORT);
 #endif
 
-			while(!mqtt.connect(MQTT_CLIENT_ID))
+			while(!mqtt.connect(MQTT_CLIENT_ID, lastWillTopic, lastWillQos, lastWillRetain, lastWillMessage))
 			{
 				blink(2, 1000);
 			}

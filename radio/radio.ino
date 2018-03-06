@@ -176,7 +176,23 @@ static unsigned strntou(char *str, size_t len, char **endptr)
 	return val;
 }
 
-void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
+static void sendStatus()
+{
+	if(playing)
+	{
+		char *buff = (char *)malloc(strlen(stationUrl) + 7);
+		sprintf(buff, "1,%d,%s", (int)volume, stationUrl);
+
+		mqtt.publish(MQTT_TOPIC "/status", buff, true);
+		free(buff);
+	}
+	else
+	{
+		mqtt.publish(MQTT_TOPIC "/status", "0", true);
+	}
+}
+
+void mqttCallback(char *topic, uint8_t *payload, unsigned len)
 {
 #ifdef DEBUG
 	Serial.print("Received MQTT message on ");
@@ -212,6 +228,8 @@ void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 			startPlaying(stationUrl);
 		else
 			stopPlaying();
+
+		sendStatus();
 	}
 	else if(strcmp(topic, "/volume") == 0)
 	{
@@ -229,6 +247,9 @@ void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 			Serial.println(volume);
 #endif
 			output.setVolume(volume);
+
+			if(playing)
+				sendStatus();
 		}
 	}
 	else if(strcmp(topic, "/tone") == 0)
@@ -264,6 +285,8 @@ void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 		memcpy(stationUrl, payload, len);
 		stationUrl[len] = 0;
 		startPlaying(stationUrl);
+
+		sendStatus();
 	}
 }
 
@@ -282,8 +305,11 @@ void setup()
 	WiFi.begin(WIFI_SSID, WIFI_PSK);
 
 	mqtt.setServer(MQTT_SERVER, MQTT_PORT);
-	mqtt.setCallback(mqtt_callback);
+	mqtt.setCallback(mqttCallback);
 
+	connections.lastWillRetain = true;
+	connections.lastWillTopic = MQTT_TOPIC "/status";
+	connections.lastWillMessage = "0";
 	connections.setup();
 
 	SPI.begin();
@@ -294,6 +320,8 @@ void setup()
 	buffer = (uint8_t *)malloc(BUFFER_SIZE);
 	buffpos = 0;
 	bufflen = 0;
+
+	stationUrl[0] = 0;
 }
 
 void loop()
@@ -304,6 +332,8 @@ void loop()
 		mqtt.subscribe(MQTT_TOPIC "/volume");
 		mqtt.subscribe(MQTT_TOPIC "/tone");
 		mqtt.subscribe(MQTT_TOPIC "/station");
+
+		sendStatus();
 	});
 
 	if(playing)
