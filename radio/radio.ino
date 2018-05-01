@@ -9,6 +9,9 @@
 #define DEBUG_LED_ON LOW
 #include "common/Blink.hpp"
 
+#define HTTP_USER_AGENT "WebRadio ESP8266/VS1053 - https://github.com/M4GNV5/IoT"
+#include "common/HTTP.hpp"
+
 #include "common/Log.hpp"
 #include "common/ConnectionManager.hpp"
 
@@ -36,73 +39,6 @@ size_t bufflen;
 		LOGLN(msg); \
 		blink(code); \
 	} while(0)
-
-//very simplistic HTTP get
-bool http_open(const char *host, uint16_t port, const char *path)
-{
-	if(!input->connect(host, port))
-	{
-		LOG("Could not connect to ");
-		LOG(host);
-		LOG(":");
-		LOGLN(port);
-
-		blink(3);
-		return false;
-	}
-
-	input->print("GET ");
-	input->print(path);
-	input->println(" HTTP/1.1");
-
-	input->print("Host: ");
-	input->println(host);
-
-	input->println("User-Agent: WebRadio ESP8266/VS1053 - https://github.com/M4GNV5/IoT");
-	input->println("Accept: audio/*");
-	input->println();
-
-	const char *httpOk = "HTTP/??? 200 OK\r\n";
-	const int httpOkLen = strlen(httpOk);
-	for(int i = 0; i < httpOkLen; i++)
-	{
-		while(input->connected() && !input->available())
-			yield();
-
-		if(!input->connected() || (input->read() != httpOk[i] && httpOk[i] != '?'))
-		{
-			input->stop();
-			input->flush();
-			ERROR(5, "Unexpected HTTP response");
-			return false;
-		}
-	}
-
-	bool startOfLine = true;
-	for(;;)
-	{
-		while(input->connected() && !input->available())
-			yield();
-
-		if(!input->connected())
-		{
-			input->stop();
-			input->flush();
-			ERROR(5, "Unexpected HTTP response");
-			return false;
-		}
-
-		if(input->read() == '\r' && input->read() == '\n')
-		{
-			if(startOfLine)
-				break;
-			else
-				startOfLine = true;
-		}
-	}
-
-	return true;
-}
 
 static void startPlaying(const char *url)
 {
@@ -147,13 +83,17 @@ static void startPlaying(const char *url)
 	if(path[0] == 0)
 		path = "/";
 
-	if(http_open(_host, port, path))
+	if(http_get(input, _host, port, path))
 	{
 		output.startSong();
 		buffpos = 0;
 		bufflen = 0;
 		playing = true;
 		LOGLN("Successfully started playing");
+	}
+	else
+	{
+		blink(5);
 	}
 }
 static void stopPlaying()
