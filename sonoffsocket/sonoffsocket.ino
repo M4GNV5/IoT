@@ -1,14 +1,20 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
-#include "./config.h"
+#include "config.h"
 
-#define invert(x) (x == HIGH ? LOW : HIGH)
-#define tostring(x) (x == HIGH ? "1" : "0")
+#define DEBUG_LED_PIN 13
+#define DEBUG_LED_ON HIGH
+#include "common/Blink.hpp"
+
+#include "common/Log.hpp"
+#include "common/ConnectionManager.hpp"
 
 #define GPIO_BUTTON 0
-#define GPIO_LED 13
 #define GPIO_RELAY 12
+#define GPIO_LED 13
+
+#define tostring(x) (x == HIGH ? "1" : "0")
 
 enum
 {
@@ -17,7 +23,6 @@ enum
 	ACTION_TOGGLE,
 };
 
-int ignoreCount = 0;
 bool buttonPressed = false;
 uint8_t led = HIGH;
 uint8_t relay = LOW;
@@ -25,18 +30,8 @@ uint8_t relay = LOW;
 WiFiClient client;
 PubSubClient mqtt(client);
 
-void blink(uint8_t count, uint32_t totalSleep)
-{
-	for(int i = 0; i < count; i++)
-	{
-		digitalWrite(GPIO_LED, LOW);
-		delay(100);
-		digitalWrite(GPIO_LED, HIGH);
-		delay(100);
-	}
-
-	delay(totalSleep - count * 200);
-}
+void mqtt_reconnect();
+ConnectionManager connections(mqtt, mqtt_reconnect);
 
 uint8_t performAction(uint8_t old, uint8_t action)
 {
@@ -48,24 +43,30 @@ uint8_t performAction(uint8_t old, uint8_t action)
 		return old;
 }
 
+void mqtt_reconnect()
+{
+	mqtt.subscribe(MQTT_TOPIC);
+	mqtt.subscribe(MQTT_TOPIC "/led");
+	mqtt.subscribe(MQTT_TOPIC "/relay");
+}
+
 void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 {
+	static int ignoreCount = 0;
 	if(ignoreCount > 0)
 	{
 		ignoreCount--;
 		return;
 	}
 
-#ifdef DEBUG
-	Serial.print("Received MQTT message on ");
-	Serial.print(topic);
-	Serial.print(" of length ");
-	Serial.print(len);
-	Serial.print(": ");
+	LOG("Received MQTT message on ");
+	LOG(topic);
+	LOG(" of length ");
+	LOG(len);
+	LOG(": ");
 	for(unsigned i = 0; i < len; i++)
-		Serial.print((char)payload[i]);
-	Serial.println();
-#endif
+		LOG((char)payload[i]);
+	LOGLN("");
 
 	unsigned prefixLen = strlen(MQTT_TOPIC);
 	if(strncmp(topic, MQTT_TOPIC, prefixLen) != 0)
@@ -88,7 +89,7 @@ void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 	if(topic[0] == 0)
 	{
 		relay = performAction(relay, action);
-		led = invert(relay);
+		led = !relay;
 	}
 	else if(strcmp(topic, "/led") == 0)
 	{
@@ -101,10 +102,8 @@ void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 
 	if(oldRelay != relay)
 	{
-#ifdef DEBUG
-		Serial.print("Set relay to ");
-		Serial.println(relay);
-#endif
+		LOG("Set relay to ");
+		LOGLN(relay);
 
 		digitalWrite(GPIO_RELAY, relay);
 
@@ -113,13 +112,11 @@ void mqtt_callback(char *topic, uint8_t *payload, unsigned len)
 	}
 	if(oldLed != led)
 	{
-#ifdef DEBUG
-		Serial.print("Set led to ");
-		Serial.println(led);
-#endif
+		LOG("Set led to ");
+		LOGLN(led);
 
 		//the led is on when the pin is off, so we need to invert `led` here
-		digitalWrite(GPIO_LED, invert(led));
+		digitalWrite(GPIO_LED, !led);
 
 		mqtt.publish(MQTT_TOPIC "/led", tostring(led), true);
 		ignoreCount++;
@@ -130,9 +127,9 @@ void setup()
 {
 #ifdef DEBUG
 	Serial.begin(115200);
-	delay(5000);
-	Serial.println("");
+	delay(1000);
 #endif
+	LOGLN("");
 
 	WiFi.persistent(false);
 	WiFi.mode(WIFI_OFF);
@@ -151,62 +148,14 @@ void setup()
 
 void loop()
 {
-	if(WiFi.status() != WL_CONNECTED)
-	{
-#ifdef DEBUG
-		Serial.print("(Re-)connecting to WiFi ");
-		Serial.println(WIFI_SSID);
-#endif
-
-		while (WiFi.status() != WL_CONNECTED)
-		{
-			blink(1, 1000);
-		}
-		digitalWrite(GPIO_LED, invert(led));
-
-#ifdef DEBUG
-		Serial.print("Connected, ");
-		Serial.print("IP-Address: ");
-		Serial.println(WiFi.localIP());
-#endif
-	}
-
-	if(!mqtt.connected())
-	{
-#ifdef DEBUG
-		Serial.print("(Re-)connecting to MQTT broker at ");
-		Serial.print(MQTT_SERVER);
-		Serial.print(":");
-		Serial.println(MQTT_PORT);
-#endif
-
-		while(!mqtt.connect(MQTT_CLIENT_ID))
-		{
-			blink(2, 1000);
-		}
-
-#ifdef DEBUG
-		Serial.println("Connected");
-#endif
-
-		digitalWrite(GPIO_LED, invert(led));
-
-		mqtt.publish(MQTT_TOPIC "/relay", tostring(relay), true);
-		mqtt.publish(MQTT_TOPIC "/led", tostring(led), true);
-		mqtt.subscribe(MQTT_TOPIC);
-		mqtt.subscribe(MQTT_TOPIC "/led");
-		mqtt.subscribe(MQTT_TOPIC "/relay");
-	}
-
-	mqtt.loop();
+	connections.loop();
 
 	if(digitalRead(GPIO_BUTTON) == 0)
 	{
 		if(!buttonPressed)
 		{
-#ifdef DEBUG
-			Serial.println("Button press detected. Emulating MQTT receive...");
-#endif
+			LOGLN("Button press detected. Emulating MQTT receive...");
+
 			mqtt_callback((char *)MQTT_TOPIC, (uint8_t *)"toggle", 6);
 			buttonPressed = true;
 		}

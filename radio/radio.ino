@@ -3,13 +3,20 @@
 
 #include "VS1053.hpp"
 #include "config.h"
-#include "ConnectionManager.hpp"
+
+//built-in led on LoLin boards is off when D4 is HIGH
+#define DEBUG_LED_PIN D4
+#define DEBUG_LED_ON LOW
+#include "common/Blink.hpp"
+
+#include "common/Log.hpp"
+#include "common/ConnectionManager.hpp"
 
 WiFiClient mqtt_sock;
 PubSubClient mqtt(mqtt_sock);
 
-//built-in led on LoLin boards is off when D4 is HIGH
-ConnectionManager connections(mqtt, D4, HIGH);
+void mqttReconnect();
+ConnectionManager connections(mqtt, mqttReconnect);
 
 WiFiClient input;
 VS1053 output(VS1053_PINS);
@@ -22,15 +29,20 @@ uint8_t *buffer;
 size_t buffpos;
 size_t bufflen;
 
+#define ERROR(code, msg) do { \
+		LOGLN(msg); \
+		blink(code); \
+	} while(0)
+
 //very simplistic HTTP get
 bool http_open(const char *host, const char *path)
 {
 	if(!input.connect(host, 80))
 	{
-#ifdef DEBUG
-		Serial.print("Coult not connect to ");
-		Serial.println(host);
-#endif
+		LOG("Coult not connect to ");
+		LOGLN(host);
+
+		blink(3);
 		return false;
 	}
 
@@ -54,11 +66,9 @@ bool http_open(const char *host, const char *path)
 
 		if(!input.connected() || (input.read() != httpOk[i] && httpOk[i] != '?'))
 		{
-#ifdef DEBUG
-			Serial.println("Unexpected HTTP response");
-#endif
 			input.stop();
 			input.flush();
+			ERROR(5, "Unexpected HTTP response");
 			return false;
 		}
 	}
@@ -71,11 +81,9 @@ bool http_open(const char *host, const char *path)
 
 		if(!input.connected())
 		{
-#ifdef DEBUG
-			Serial.println("Server closed connection");
-#endif
 			input.stop();
 			input.flush();
+			ERROR(5, "Unexpected HTTP response");
 			return false;
 		}
 
@@ -96,26 +104,21 @@ static void startPlaying(const char *url)
 	if(playing)
 		stopPlaying();
 
-#ifdef DEBUG
-	Serial.print("Playing ");
-	Serial.println(url);
-#endif
+	LOG("Playing ");
+	LOGLN(url);
 
 	if(strncmp(url, "http://", 7) != 0)
 	{
-#ifdef DEBUG
-		Serial.println("Not a valid http url");
-#endif
+		ERROR(4, "Not a valid http url");
 		return;
 	}
+	//TODO https
 
 	const char *host = url + 7;
 	const char *path = strchr(host, '/');
 	if(path == NULL)
 	{
-#ifdef DEBUG
-		Serial.println("Not a valid http path");
-#endif
+		ERROR(4, "Not a valid http path");
 		return;
 	}
 
@@ -133,9 +136,7 @@ static void startPlaying(const char *url)
 		buffpos = 0;
 		bufflen = 0;
 		playing = true;
-#ifdef DEBUG
-		Serial.println("Successfully started playing");
-#endif
+		LOGLN("Successfully started playing");
 	}
 }
 static void stopPlaying()
@@ -143,9 +144,7 @@ static void stopPlaying()
 	if(!playing)
 		return;
 
-#ifdef DEBUG
-	Serial.println("Stopping playback");
-#endif
+	LOGLN("Stopping playback");
 
 	if(input.connected())
 	{
@@ -192,18 +191,26 @@ static void sendStatus()
 	}
 }
 
+void mqttReconnect()
+{
+	mqtt.subscribe(MQTT_TOPIC "/playing");
+	mqtt.subscribe(MQTT_TOPIC "/volume");
+	mqtt.subscribe(MQTT_TOPIC "/tone");
+	mqtt.subscribe(MQTT_TOPIC "/station");
+
+	sendStatus();
+}
+
 void mqttCallback(char *topic, uint8_t *payload, unsigned len)
 {
-#ifdef DEBUG
-	Serial.print("Received MQTT message on ");
-	Serial.print(topic);
-	Serial.print(" of length ");
-	Serial.print(len);
-	Serial.print(": ");
+	LOG("Received MQTT message on ");
+	LOG(topic);
+	LOG(" of length ");
+	LOG(len);
+	LOG(": ");
 	for(unsigned i = 0; i < len; i++)
-		Serial.print((char)payload[i]);
-	Serial.println();
-#endif
+		LOG((char)payload[i]);
+	LOGLN("");
 
 	unsigned prefixLen = strlen(MQTT_TOPIC);
 	if(strncmp(topic, MQTT_TOPIC, prefixLen) != 0)
@@ -242,10 +249,9 @@ void mqttCallback(char *topic, uint8_t *payload, unsigned len)
 
 		if(volume != oldVolume)
 		{
-#ifdef DEBUG
-			Serial.print("Set volume to ");
-			Serial.println(volume);
-#endif
+			LOG("Set volume to ");
+			LOGLN(volume);
+
 			output.setVolume(volume);
 
 			if(playing)
@@ -264,17 +270,16 @@ void mqttCallback(char *topic, uint8_t *payload, unsigned len)
 				return;
 		}
 
-#ifdef DEBUG
-			Serial.print("Setting tone to ");
-			for(int i = 0; i < 4; i++)
-			{
-				Serial.print(values[i]);
+		LOG("Setting tone to ");
+		for(int i = 0; i < 4; i++)
+		{
+			LOG(values[i]);
 
-				if(i != 3)
-					Serial.print("/");
-			}
-			Serial.println();
-#endif
+			if(i != 3)
+				LOG("/");
+		}
+		LOGLN("");
+
 		output.setTone(values);
 	}
 	else if(strcmp(topic, "/station") == 0)
@@ -295,9 +300,8 @@ void setup()
 #ifdef DEBUG
 	Serial.begin(115200);
 	delay(1000);
-	Serial.println();
-	Serial.println("Wake up.");
 #endif
+	LOGLN("");
 
 	WiFi.persistent(false);
 	WiFi.mode(WIFI_OFF);
@@ -310,7 +314,6 @@ void setup()
 	connections.lastWillRetain = true;
 	connections.lastWillTopic = MQTT_TOPIC "/status";
 	connections.lastWillMessage = "0";
-	connections.setup();
 
 	SPI.begin();
 	output.begin();
@@ -326,23 +329,14 @@ void setup()
 
 void loop()
 {
-	connections.loop([]()
-	{
-		mqtt.subscribe(MQTT_TOPIC "/playing");
-		mqtt.subscribe(MQTT_TOPIC "/volume");
-		mqtt.subscribe(MQTT_TOPIC "/tone");
-		mqtt.subscribe(MQTT_TOPIC "/station");
-
-		sendStatus();
-	});
+	connections.loop();
 
 	if(playing)
 	{
 		if(!input.connected())
 		{
-#ifdef DEBUG
-			Serial.println("Connection to server lost");
-#endif
+			ERROR(5, "Connection to server lost");
+
 			playing = false;
 			startPlaying(stationUrl);
 

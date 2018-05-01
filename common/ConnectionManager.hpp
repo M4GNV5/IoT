@@ -1,11 +1,14 @@
 #pragma once
 
+#include "./Log.hpp"
+#include "./Blink.hpp"
+
 class ConnectionManager
 {
 private:
 	PubSubClient& mqtt;
-	uint8_t ledPin;
-	uint8_t ledOff;
+	void (*mqttReconnect)();
+	bool hadWifiLoss = true;
 
 public:
 	uint8_t lastWillQos = MQTTQOS0;
@@ -13,77 +16,62 @@ public:
 	const char *lastWillMessage = NULL;
 	bool lastWillRetain = true;
 
-	ConnectionManager(PubSubClient& _mqtt, uint8_t _ledPin, uint8_t _ledOff)
-		: mqtt(_mqtt), ledPin(_ledPin), ledOff(_ledOff)
+	ConnectionManager(PubSubClient& _mqtt, void (*_mqttReconnect)())
+		: mqtt(_mqtt), mqttReconnect(_mqttReconnect)
 	{
 	}
 
-	void blink(uint8_t count, uint32_t totalSleep)
+	bool loop()
 	{
-		for(int i = 0; i < count; i++)
+		if(hadWifiLoss)
 		{
-			digitalWrite(ledPin, !ledOff);
-			delay(100);
-			digitalWrite(ledPin, ledOff);
-			delay(100);
-		}
-
-#ifdef DEBUG
-		Serial.print(".");
-#endif
-
-		delay(totalSleep - count * 200);
-	}
-
-	void setup()
-	{
-		pinMode(ledPin, OUTPUT);
-		digitalWrite(ledPin, ledOff);
-	}
-
-	void loop(void (*mqtt_reconnect)())
-	{
-		if(WiFi.status() != WL_CONNECTED)
-		{
-#ifdef DEBUG
-			Serial.print("(Re-)connecting to WiFi ");
-			Serial.print(WIFI_SSID);
-#endif
-
-			while (WiFi.status() != WL_CONNECTED)
+			if(WiFi.status() != WL_CONNECTED)
 			{
-				blink(1, 1000);
+				blink(1);
+				return false;
 			}
-
-#ifdef DEBUG
-			Serial.println();
-			Serial.print("Connected, IP-Address: ");
-			Serial.println(WiFi.localIP());
-#endif
-		}
-
-		if(!mqtt.connected())
-		{
-#ifdef DEBUG
-			Serial.print("(Re-)connecting to MQTT broker at ");
-			Serial.print(MQTT_SERVER);
-			Serial.print(":");
-			Serial.print(MQTT_PORT);
-#endif
-
-			while(!mqtt.connect(MQTT_CLIENT_ID, lastWillTopic, lastWillQos, lastWillRetain, lastWillMessage))
+			else
 			{
-				blink(2, 1000);
+				LOGLN("");
+				LOG("Connected, IP-Address: ");
+				LOGLN(WiFi.localIP());
+
+				hadWifiLoss = false;
 			}
+		}
+		else if(WiFi.status() != WL_CONNECTED)
+		{
+			LOG("(Re-)connecting to WiFi ");
+			LOGLN(WIFI_SSID);
 
-#ifdef DEBUG
-			Serial.println();
-			Serial.println("Connected");
-#endif
+			hadWifiLoss = true;
+		}
+		
+		if(mqtt.connected())
+		{
+			mqtt.loop();
+		}
+		else
+		{
+			LOG("(Re-)connecting to MQTT broker at ");
+			LOG(MQTT_SERVER);
+			LOG(":");
+			LOGLN(MQTT_PORT);
 
-			mqtt_reconnect();
+			if(mqtt.connect(MQTT_CLIENT_ID, lastWillTopic, lastWillQos, lastWillRetain, lastWillMessage))
+			{
+				LOGLN("");
+				LOGLN("Connected");
+
+				mqttReconnect();
+			}
+			else
+			{
+				blink(2);
+				return false;
+			}
 		}
 
-		mqtt.loop();
+		return true;
 	}
 };
