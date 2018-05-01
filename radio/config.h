@@ -15,5 +15,5 @@
 //cs, dcs, dreq
 #define VS1053_PINS D1, D0, D2
 
-#define BUFFER_SIZE 32768
+#define BUFFER_SIZE 4096
 #define TRANSFER_CHUNK_SIZE 32

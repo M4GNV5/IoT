@@ -18,7 +18,10 @@ PubSubClient mqtt(mqtt_sock);
 void mqttReconnect();
 ConnectionManager connections(mqtt, mqttReconnect);
 
-WiFiClient input;
+WiFiClient httpInput;
+WiFiClientSecure httpsInput;
+
+WiFiClient *input = NULL;
 VS1053 output(VS1053_PINS);
 
 bool playing = false;
@@ -35,39 +38,41 @@ size_t bufflen;
 	} while(0)
 
 //very simplistic HTTP get
-bool http_open(const char *host, const char *path)
+bool http_open(const char *host, uint16_t port, const char *path)
 {
-	if(!input.connect(host, 80))
+	if(!input->connect(host, port))
 	{
-		LOG("Coult not connect to ");
-		LOGLN(host);
+		LOG("Could not connect to ");
+		LOG(host);
+		LOG(":");
+		LOGLN(port);
 
 		blink(3);
 		return false;
 	}
 
-	input.print("GET ");
-	input.print(path);
-	input.println(" HTTP/1.1");
+	input->print("GET ");
+	input->print(path);
+	input->println(" HTTP/1.1");
 
-	input.print("Host: ");
-	input.println(host);
+	input->print("Host: ");
+	input->println(host);
 
-	input.println("User-Agent: WebRadio ESP8266/VS1053 - https://github.com/M4GNV5/IoT");
-	input.println("Accept: audio/*");
-	input.println();
+	input->println("User-Agent: WebRadio ESP8266/VS1053 - https://github.com/M4GNV5/IoT");
+	input->println("Accept: audio/*");
+	input->println();
 
 	const char *httpOk = "HTTP/??? 200 OK\r\n";
 	const int httpOkLen = strlen(httpOk);
 	for(int i = 0; i < httpOkLen; i++)
 	{
-		while(input.connected() && !input.available())
+		while(input->connected() && !input->available())
 			yield();
 
-		if(!input.connected() || (input.read() != httpOk[i] && httpOk[i] != '?'))
+		if(!input->connected() || (input->read() != httpOk[i] && httpOk[i] != '?'))
 		{
-			input.stop();
-			input.flush();
+			input->stop();
+			input->flush();
 			ERROR(5, "Unexpected HTTP response");
 			return false;
 		}
@@ -76,18 +81,18 @@ bool http_open(const char *host, const char *path)
 	bool startOfLine = true;
 	for(;;)
 	{
-		while(input.connected() && !input.available())
+		while(input->connected() && !input->available())
 			yield();
 
-		if(!input.connected())
+		if(!input->connected())
 		{
-			input.stop();
-			input.flush();
+			input->stop();
+			input->flush();
 			ERROR(5, "Unexpected HTTP response");
 			return false;
 		}
 
-		if(input.read() == '\r' && input.read() == '\n')
+		if(input->read() == '\r' && input->read() == '\n')
 		{
 			if(startOfLine)
 				break;
@@ -107,14 +112,26 @@ static void startPlaying(const char *url)
 	LOG("Playing ");
 	LOGLN(url);
 
-	if(strncmp(url, "http://", 7) != 0)
+	const char *host;
+	uint16_t port;
+	if(strncmp(url, "http://", 7) == 0)
 	{
-		ERROR(4, "Not a valid http url");
+		input = &httpInput;
+		port = 80;
+		host = url + 7;
+	}
+	else if(strncmp(url, "https://", 8) == 0)
+	{
+		input = &httpsInput;
+		port = 443;
+		host = url + 8;
+	}
+	else
+	{
+		ERROR(4, "Invalid URI");
 		return;
 	}
-	//TODO https
 
-	const char *host = url + 7;
 	const char *path = strchr(host, '/');
 	if(path == NULL)
 	{
@@ -130,7 +147,7 @@ static void startPlaying(const char *url)
 	if(path[0] == 0)
 		path = "/";
 
-	if(http_open(_host, path))
+	if(http_open(_host, port, path))
 	{
 		output.startSong();
 		buffpos = 0;
@@ -146,10 +163,10 @@ static void stopPlaying()
 
 	LOGLN("Stopping playback");
 
-	if(input.connected())
+	if(input->connected())
 	{
-		input.stop();
-		input.flush();
+		input->stop();
+		input->flush();
 	}
 
 	output.stopSong();
@@ -335,7 +352,7 @@ void loop()
 
 	if(playing)
 	{
-		if(!input.connected())
+		if(!input->connected())
 		{
 			ERROR(5, "Connection to server lost");
 
@@ -346,7 +363,7 @@ void loop()
 				return;
 		}
 
-		size_t bytesAvailable = input.available();
+		size_t bytesAvailable = input->available();
 		if(bufflen < BUFFER_SIZE && bytesAvailable > 0)
 		{
 			uint8_t *start = &buffer[(buffpos + bufflen) % BUFFER_SIZE];
@@ -358,7 +375,7 @@ void loop()
 			if(BUFFER_SIZE - bufflen < len)
 				len = BUFFER_SIZE - bufflen;
 
-			input.readBytes(start, len);
+			input->readBytes(start, len);
 			bufflen += len;
 		}
 
@@ -372,4 +389,6 @@ void loop()
 			bufflen -= TRANSFER_CHUNK_SIZE;
 		}
 	}
+
+	delay(0);
 }

@@ -8,7 +8,7 @@ class ConnectionManager
 private:
 	PubSubClient& mqtt;
 	void (*mqttReconnect)();
-	bool hadWifiLoss = true;
+	bool hadWifiLoss = false;
 
 public:
 	uint8_t lastWillQos = MQTTQOS0;
@@ -32,7 +32,6 @@ public:
 			}
 			else
 			{
-				LOGLN("");
 				LOG("Connected, IP-Address: ");
 				LOGLN(WiFi.localIP());
 
@@ -53,15 +52,12 @@ public:
 		}
 		else
 		{
-			LOG("(Re-)connecting to MQTT broker at ");
-			LOG(MQTT_SERVER);
-			LOG(":");
-			LOGLN(MQTT_PORT);
-
 			if(mqtt.connect(MQTT_CLIENT_ID, lastWillTopic, lastWillQos, lastWillRetain, lastWillMessage))
 			{
-				LOGLN("");
-				LOGLN("Connected");
+				LOG("Connected to MQTT broker at ");
+				LOG(MQTT_SERVER);
+				LOG(":");
+				LOGLN(MQTT_PORT);
 
 				mqttReconnect();
 			}
