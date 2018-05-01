@@ -247,6 +247,8 @@ void mqttCallback(char *topic, uint8_t *payload, unsigned len)
 		if(end != (char *)payload + len)
 			return;
 
+		if(volume > 100)
+			volume = 100;
 		if(volume != oldVolume)
 		{
 			LOG("Set volume to ");
