@@ -32,6 +32,9 @@ struct
 	uint32_t netmask;
 	uint32_t dns0;
 	uint32_t dns1;
+
+	int32_t channel;
+	uint8_t bssid[6];
 } config;
 
 void goToSleep()
@@ -39,9 +42,6 @@ void goToSleep()
 	LOG("Going to sleep after ");
 	LOG(millis());
 	LOGLN("ms");
-
-	//make sure everything is done
-	yield();
 
 	int32_t sleepMs = (REFRESH_CYCLE * 1000) - millis();
 	if(sleepMs <= 0)
@@ -74,7 +74,7 @@ void setup()
 	{
 		LOG(" using static configuration");
 
-		WiFi.begin(WIFI_SSID, WIFI_PSK);
+		WiFi.begin(WIFI_SSID, WIFI_PSK, config.channel, config.bssid, true);
 		WiFi.config(config.localIP, config.gateway, config.netmask, config.dns0, config.dns1);
 	}
 	else
@@ -107,6 +107,9 @@ void setup()
 		config.netmask = WiFi.subnetMask();
 		config.dns0 = WiFi.dnsIP(0);
 		config.dns1 = WiFi.dnsIP(1);
+
+		config.channel = WiFi.channel();
+		memcpy(config.bssid, WiFi.BSSID(), 6);
 
 		ESP.rtcUserMemoryWrite(0, (uint32_t *)&config, sizeof(config));
 	}
