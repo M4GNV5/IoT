@@ -35,7 +35,32 @@ struct
 
 	int32_t channel;
 	uint8_t bssid[6];
+
+	char lastModified[64];
 } config;
+
+bool newLastModified = false;
+bool imageModified = true;
+
+#define LAST_MODIFIED_HEADER "Last-Modified"
+void header_handler(char *buff, bool isComplete)
+{
+	size_t headerLen = strlen(LAST_MODIFIED_HEADER);
+	if(strncmp(buff, LAST_MODIFIED_HEADER, headerLen) != 0)
+		return;
+
+	buff += headerLen + 2; //skip header, : and space
+
+	if(strncmp(buff, config.lastModified, 64) == 0)
+	{
+		imageModified = false;
+	}
+	else
+	{
+		strncpy(config.lastModified, buff, 64);
+		newLastModified = true;
+	}
+}
 
 void goToSleep()
 {
@@ -111,14 +136,34 @@ void setup()
 		config.channel = WiFi.channel();
 		memcpy(config.bssid, WiFi.BSSID(), 6);
 
+		config.lastModified[0] = 0;
+
 		ESP.rtcUserMemoryWrite(0, (uint32_t *)&config, sizeof(config));
 	}
 
-	if(!http_get(&input, IMAGE_SOURCE_HOST, IMAGE_SOURCE_PORT, IMAGE_SOURCE_PATH))
+	if(!http_get(&input, IMAGE_SOURCE_HOST, IMAGE_SOURCE_PORT, IMAGE_SOURCE_PATH, header_handler))
 	{
 		LOGLN("HTTP GET failed");
 		blink(2);
 		goToSleep();
+	}
+
+	if(!imageModified)
+	{
+		input.stop();
+		input.flush();
+
+		LOGLN("Image did not change");
+		blink(1);
+		goToSleep();
+	}
+
+	if(newLastModified)
+	{
+		LOG("Got new Last-Modified value: ");
+		LOGLN(config.lastModified);
+
+		ESP.rtcUserMemoryWrite(0, (uint32_t *)&config, sizeof(config));
 	}
 
 	LOGLN("Receiving Image...");
