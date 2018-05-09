@@ -94,6 +94,8 @@ void setup()
 
 	LOG("Connecting to WiFi ");
 	LOG(WIFI_SSID);
+	int timeout;
+
 	if(ESP.rtcUserMemoryRead(0, (uint32_t *)&config, sizeof(config))
 		&& config.magic == MAGIC)
 	{
@@ -101,6 +103,7 @@ void setup()
 
 		WiFi.begin(WIFI_SSID, WIFI_PSK, config.channel, config.bssid, true);
 		WiFi.config(config.localIP, config.gateway, config.netmask, config.dns0, config.dns1);
+		timeout = 10;
 	}
 	else
 	{
@@ -108,9 +111,10 @@ void setup()
 
 		WiFi.begin(WIFI_SSID, WIFI_PSK);
 		config.magic = MAGIC + 1;
+		timeout = 60;
 	}
 
-	for(uint8_t i = 0; i < 10 && WiFi.status() != WL_CONNECTED; i++)
+	for(uint8_t i = 0; i < timeout && WiFi.status() != WL_CONNECTED; i++)
 	{
 		LOG(".");
 		blink(1);
@@ -121,6 +125,10 @@ void setup()
 	if(WiFi.status() != WL_CONNECTED)
 	{
 		LOGLN("Connecting to WiFi failed");
+
+		config.magic = MAGIC + 1; //invalidate the magic so we use DHCP next time
+		ESP.rtcUserMemoryWrite(0, (uint32_t *)&config, sizeof(config));
+
 		blink(2);
 		goToSleep();
 	}
