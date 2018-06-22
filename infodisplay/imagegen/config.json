@@ -1,0 +1,18 @@
+{
+	"width": 640,
+	"height": 384,
+	"padding": 5,
+	"font": "FiraCode-Regular.ttf",
+	"font-size": 20,
+
+	"clock": {
+		"radius": 100,
+		"font-size": 50
+	},
+
+	"fritz": {
+		"username": "<fritz box username>",
+		"password": "<fritz box user password>",
+		"max-missed-calls": 4
+	}
+}
