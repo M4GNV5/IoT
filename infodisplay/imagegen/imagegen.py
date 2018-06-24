@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import datetime, json, cv2, numpy as np, fritzconnection
+import datetime, json, cv2, numpy as np, urllib2
 from PIL import ImageFont, ImageDraw, Image  
 from fritzconnection.fritzconnection import FritzConnection
 from fritzconnection.fritzhosts import FritzHosts
@@ -40,7 +40,6 @@ draw.rectangle([minX - padding, minY - padding, maxX + padding, maxY + padding],
 draw.text((minX, minY), text, 0, clockFont)
 
 
-
 #
 # draw information retrieved from the fritz!box
 #
@@ -78,12 +77,42 @@ if len(missedCalls) > 0:
 	draw.text((width - w - padding, height / 2 - h / 2), text, 0, font)
 
 
-
 #
 # draw weather information
 #
-#TODO
+weatherIcons = ImageFont.truetype("owfont-regular.ttf", 60)
+weatherConfig = config["weather"]
 
+url = "http://api.openweathermap.org/data/2.5/forecast?cnt=3&id={}&units={}&appid={}" \
+	.format(weatherConfig["city"], weatherConfig["units"], weatherConfig["api-key"])
+try:
+	data = json.load(urllib2.urlopen(url))
+except: #go pikachu
+	data = None
 
+if data != None:
+	weatherWidth = width / 2 - clock["radius"] - 2 * padding
+
+	def drawEntry(entry, poscb):
+		text = unichr(0xeb28 - 200 + entry["weather"][0]["id"])
+
+		w, h = draw.textsize(text, weatherIcons)
+		posX = poscb(w, h)
+		draw.text((posX, height / 2 - h / 2), text, 0, weatherIcons)
+
+		iconCenterX = posX + w / 2
+		iconH = h
+
+		text = str(int(entry["main"]["temp"])) + u"°C"
+		w, h = draw.textsize(text, font)
+		draw.text((iconCenterX - w / 2, height / 2 + iconH / 2), text, 0, font)
+
+		text = datetime.datetime.fromtimestamp(entry["dt"]).strftime("%H:%M")
+		w, h = draw.textsize(text, font)
+		draw.text((iconCenterX - w / 2, height / 2 - iconH / 2 - h - padding), text, 0, font)
+
+	drawEntry(data["list"][0], lambda w, h: padding)
+	drawEntry(data["list"][1], lambda w, h: padding + weatherWidth / 2 - w / 2)
+	drawEntry(data["list"][2], lambda w, h: weatherWidth - w)
 
 img.save("output.png")
