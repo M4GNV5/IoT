@@ -52,16 +52,9 @@ text = str(hosts) + " devices online"
 w, h = draw.textsize(text, font)
 draw.text((width - w - padding, height - h - padding), text, 0, font)
 
-#display the missed calls since the last outgoing one max 7 days old
+#display the missed calls max 7 days old
 calls = FritzCall(fc=fritz)
-lastOutCall = max(calls.get_out_calls(), key=lambda x: x["Date"])["Date"]
-sevenDaysAgo = now - datetime.timedelta(7)
-maxAge = max(lastOutCall, sevenDaysAgo)
-if lastOutCall > sevenDaysAgo:
-	maxAge = lastOutCall
-else:
-	maxAge = sevenDaysAgo
-
+maxAge = now - datetime.timedelta(7)
 missedCalls = filter(lambda x: x["Date"] > maxAge and x["Device"] == "Anrufbeantworter",
 		calls.get_received_calls())
 missedCalls = missedCalls + filter(lambda x: x["Date"] > maxAge, calls.get_missed_calls())
