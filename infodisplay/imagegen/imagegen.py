@@ -87,25 +87,27 @@ if data != None:
 	weatherWidth = width / 2 - clock["radius"] - 2 * padding
 
 	def drawEntry(entry, poscb):
-		text = unichr(0xeb28 - 200 + entry["weather"][0]["id"])
+		text1 = datetime.datetime.fromtimestamp(entry["dt"]).strftime("%H:%M")
+		text2 = unichr(0xea60 + entry["weather"][0]["id"])
+		text3 = str(int(entry["main"]["temp"])) + u"°C"
 
-		w, h = draw.textsize(text, weatherIcons)
-		posX = poscb(w, h)
-		draw.text((posX, height / 2 - h / 2), text, 0, weatherIcons)
+		w1, h1 = draw.textsize(text1, font)
+		w2, h2 = draw.textsize(text2, weatherIcons)
+		w3, h3 = draw.textsize(text3, font)
 
-		iconCenterX = posX + w / 2
-		iconH = h
+		posY1 = height / 2 - h1 - h2 - h3 - 2 * padding
+		posY2 = height / 2 - h2 - h3 - 2 * padding
+		posY3 = height / 2 - h3 - padding
 
-		text = str(int(entry["main"]["temp"])) + u"°C"
-		w, h = draw.textsize(text, font)
-		draw.text((iconCenterX - w / 2, height / 2 + iconH / 2), text, 0, font)
+		posX = poscb(w2, h2)
+		iconCenterX = posX + w2 / 2
 
-		text = datetime.datetime.fromtimestamp(entry["dt"]).strftime("%H:%M")
-		w, h = draw.textsize(text, font)
-		draw.text((iconCenterX - w / 2, height / 2 - iconH / 2 - h - padding), text, 0, font)
+		draw.text((posX, posY2), text2, 0, weatherIcons)
+		draw.text((iconCenterX - w / 2, posY1), text1, 0, font)
+		draw.text((iconCenterX - w / 2, posY3), text3, 0, font)
 
 	drawEntry(data["list"][0], lambda w, h: padding)
 	drawEntry(data["list"][1], lambda w, h: padding + weatherWidth / 2 - w / 2)
-	drawEntry(data["list"][2], lambda w, h: weatherWidth - w)
+	drawEntry(data["list"][2], lambda w, h: padding + weatherWidth - w)
 
 img.save("output.png")
