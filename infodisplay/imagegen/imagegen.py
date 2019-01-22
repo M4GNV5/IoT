@@ -69,7 +69,6 @@ if len(missedCalls) > 0:
 	w, h = draw.textsize(text, font)
 	draw.text((width - w - padding, height / 2 - h / 2), text, 0, font)
 
-
 #
 # draw weather information
 #
@@ -95,19 +94,85 @@ if data != None:
 		w2, h2 = draw.textsize(text2, weatherIcons)
 		w3, h3 = draw.textsize(text3, font)
 
-		posY1 = height / 2 - h1 - h2 - h3 - 2 * padding
-		posY2 = height / 2 - h2 - h3 - 2 * padding
-		posY3 = height / 2 - h3 - padding
+		posY1 = height / 2 - h1 - h2 - h3 - 4 * padding
+		posY2 = height / 2 - h2 - h3 - 4 * padding
+		posY3 = height / 2 - h3 - 3 * padding
 
 		posX = poscb(w2, h2)
 		iconCenterX = posX + w2 / 2
 
 		draw.text((posX, posY2), text2, 0, weatherIcons)
-		draw.text((iconCenterX - w / 2, posY1), text1, 0, font)
-		draw.text((iconCenterX - w / 2, posY3), text3, 0, font)
+		draw.text((iconCenterX - w1 / 2, posY1), text1, 0, font)
+		draw.text((iconCenterX - w3 / 2, posY3), text3, 0, font)
 
 	drawEntry(data["list"][0], lambda w, h: padding)
 	drawEntry(data["list"][1], lambda w, h: padding + weatherWidth / 2 - w / 2)
 	drawEntry(data["list"][2], lambda w, h: padding + weatherWidth - w)
+
+
+#
+# draw bus information
+#
+with open("./bus.json", "r") as fd:
+	busInfo = json.load(fd)
+
+def findNextDepartures(departures):
+	result = []
+	now = datetime.datetime.now()
+	now = now.hour * 60 + now.minute
+
+	for time in departures:
+		split = time.split(":")
+		time = int(split[0]) * 60 + int(split[1])
+
+		if time > now:
+			result.append(time)
+
+		# add the departure time for tomorrow
+		result.append(24 * 60 + time)
+
+	return sorted(result)
+
+def departureTimeToStr(time):
+	if time > 24 * 60:
+		time = time - 24 * 60
+
+	return "%d:%d" % (time / 60, time % 60)
+
+def drawBusDepartures(name, times, posXCb):
+	text1 = name
+	text2 = "\n".join(map(departureTimeToStr, times[0 : 2]))
+
+	w1, h1 = draw.textsize(text1, font)
+	w2, h2 = draw.textsize(text2, font)
+
+	posX = posXCb(max(w1, w2), h1 + h2 + padding)
+	posY1 = height / 2 + 3 * padding
+	posY2 = height / 2 + h1 + 4 * padding
+
+	draw.text((posX, posY1), text1, 0, font)
+	draw.text((posX, posY2), text2, 0, font)
+
+
+
+#this is currently hard coded to two lines and a bus icon in the middle
+busInfoWidth = width / 2 - clock["radius"] - 2 * padding
+#fontAwesome = ImageFont.truetype("fontawesome-regular.ttf", 20)
+
+# font awesome is somehow broken, see python-pillow/Pillow issue 3601
+# for now we use a placeholder
+text = "XXXX\nXXXX\nXXXX"
+w, h = draw.textsize(text, font)
+x = padding + busInfoWidth / 2 - w / 2
+y = height / 2 + 3 * padding
+draw.text((x, y), text, 0, font)
+
+iconW = w
+times1 = findNextDepartures(busInfo[0]['departures'])
+times2 = findNextDepartures(busInfo[1]['departures'])
+drawBusDepartures(busInfo[0]['name'], times1, lambda w, h: x - padding - w)
+drawBusDepartures(busInfo[1]['name'], times2, lambda w, h: x + padding + iconW)
+
+
 
 img.save("output.png")
