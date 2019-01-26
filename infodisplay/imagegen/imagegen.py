@@ -140,38 +140,35 @@ def departureTimeToStr(time):
 	return "%02d:%02d" % (time / 60, time % 60)
 
 def drawBusDepartures(name, times, posXCb):
-	text1 = name
-	text2 = "\n".join(map(departureTimeToStr, times[0 : 2]))
+	timesText = "\n".join(map(departureTimeToStr, times[0 : 2]))
+	text = name + "\n" + timesText
 
-	w1, h1 = draw.textsize(text1, font)
-	w2, h2 = draw.textsize(text2, font)
+	w, h = draw.textsize(text, font)
 
-	posX = posXCb(max(w1, w2), h1 + h2 + padding)
-	posY1 = height / 2 + 3 * padding
-	posY2 = height / 2 + h1 + 4 * padding
+	posX = posXCb(w, h)
+	posY = height / 2 + 3 * padding
 
-	draw.text((posX, posY1), text1, 0, font)
-	draw.text((posX, posY2), text2, 0, font)
+	draw.text((posX, posY), text, 0, font)
 
 
 
 #this is currently hard coded to two lines and a bus icon in the middle
 busInfoWidth = width / 2 - clock["radius"] - 2 * padding
-#fontAwesome = ImageFont.truetype("fontawesome-regular.ttf", 20)
 
 # font awesome is somehow broken, see python-pillow/Pillow issue 3601
-# for now we use a placeholder
-text = "XXXX\nXXXX\nXXXX"
-w, h = draw.textsize(text, font)
+# for now we use a 60x60px png image
+#fontAwesome = ImageFont.truetype("fontawesome-regular.ttf", 20)
+
+busIcon = Image.open("./bus.png")
+w, h = busIcon.size
 x = padding + busInfoWidth / 2 - w / 2
 y = height / 2 + 3 * padding
-draw.text((x, y), text, 0, font)
+img.paste(busIcon, (x, y))
 
-iconW = w
 times1 = findNextDepartures(busInfo[0]['departures'])
 times2 = findNextDepartures(busInfo[1]['departures'])
 drawBusDepartures(busInfo[0]['name'], times1, lambda w, h: x - padding - w)
-drawBusDepartures(busInfo[1]['name'], times2, lambda w, h: x + padding + iconW)
+drawBusDepartures(busInfo[1]['name'], times2, lambda w, h: x + padding + busIcon.width)
 
 
 
