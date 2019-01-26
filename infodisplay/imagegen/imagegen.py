@@ -137,7 +137,7 @@ def departureTimeToStr(time):
 	if time > 24 * 60:
 		time = time - 24 * 60
 
-	return "%d:%d" % (time / 60, time % 60)
+	return "%02d:%02d" % (time / 60, time % 60)
 
 def drawBusDepartures(name, times, posXCb):
 	text1 = name
