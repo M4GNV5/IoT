@@ -1,0 +1,77 @@
+<html charset="utf-8">
+<head>
+	<title>
+		Twizy Tuuut Tuuut!
+	</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<style>
+		button {
+			width: 100%;
+			margin-bottom: 10px;
+			height: 55px;
+			font-size: 15px;
+			border-radius: 12px;
+			background-color: black;
+		}
+
+		#btn-timed {
+			color: yellow;
+		}
+
+		#btn-enable {
+			color: green;
+		}
+
+		#btn-disable {
+			color: red;
+		}
+
+		body {
+			color: white;
+			background-color: black;
+		}
+
+		p {
+			text-align: center;
+			width: 100%;
+		}
+
+		#status {
+			font-style: italic;
+		}
+	</style>
+	<script>
+		var currentlyActive = false;
+		function checkStatus() {
+			fetch("/status")
+				.then(response => response.text())
+				.then(data => {
+					console.log(data);
+					data = data === "true";
+					document.getElementById("status").innerText = data ? "Tuuut Tuuut!" : "Aus";
+				});
+		}
+		function ajax(to) {
+			return fetch("/set/" + to)
+				.then(() => checkStatus());
+		}
+		function enableOnce() {
+			if(currentlyActive)
+				return;
+			currentlyActive = true;
+
+			ajax("on");
+			setTimeout(() => {
+				ajax("off")
+				currentlyActive = false;
+			}, 2000);
+		}
+	</script>
+</head>
+	<body onload="checkStatus();">
+		<p>Aktueller Status: <span id="status">Unbekannt</span></p>
+		<button id="btn-timed" onclick="enableOnce();">Tuuut Tuuut!</button><br>
+		<button id="btn-enable" onclick="ajax('on');">Aktivieren</button><br>
+		<button id="btn-disable" onclick="ajax('off');">Deaktivieren</button><br>
+	</body>
+</html>
